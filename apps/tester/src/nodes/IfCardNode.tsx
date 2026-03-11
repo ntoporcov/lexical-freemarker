@@ -12,6 +12,8 @@ import {
   type Spread,
 } from 'lexical';
 
+import { parseTemplate, serializeIfNode } from '@mininic-nt/lexical-freemarker';
+
 import { IfCardComponent } from '../plugins/IfCardComponent';
 
 export type SerializedIfCardNode = Spread<{
@@ -19,6 +21,7 @@ export type SerializedIfCardNode = Spread<{
   content: string;
   elseContent: string;
   hasElse: boolean;
+  errorMessage: string | null;
 }, SerializedLexicalNode>;
 
 export class IfCardNode extends DecoratorNode<JSX.Element> {
@@ -26,6 +29,7 @@ export class IfCardNode extends DecoratorNode<JSX.Element> {
   __content: string;
   __elseContent: string;
   __hasElse: boolean;
+  __errorMessage: string | null;
 
   static getType(): string {
     return 'tester-if-card';
@@ -37,6 +41,7 @@ export class IfCardNode extends DecoratorNode<JSX.Element> {
       node.__content,
       node.__elseContent,
       node.__hasElse,
+      node.__errorMessage,
       node.__key,
     );
   }
@@ -47,6 +52,7 @@ export class IfCardNode extends DecoratorNode<JSX.Element> {
       serializedNode.content,
       serializedNode.elseContent,
       serializedNode.hasElse,
+      serializedNode.errorMessage,
     );
   }
 
@@ -55,6 +61,7 @@ export class IfCardNode extends DecoratorNode<JSX.Element> {
     content = 'Adult',
     elseContent = 'Minor',
     hasElse = true,
+    errorMessage: string | null = null,
     key?: NodeKey,
   ) {
     super(key);
@@ -62,6 +69,7 @@ export class IfCardNode extends DecoratorNode<JSX.Element> {
     this.__content = content;
     this.__elseContent = elseContent;
     this.__hasElse = hasElse;
+    this.__errorMessage = errorMessage;
   }
 
   exportJSON(): SerializedIfCardNode {
@@ -73,6 +81,7 @@ export class IfCardNode extends DecoratorNode<JSX.Element> {
       content: this.getContent(),
       elseContent: this.getElseContent(),
       hasElse: this.getHasElse(),
+      errorMessage: this.getErrorMessage(),
     };
   }
 
@@ -118,6 +127,10 @@ export class IfCardNode extends DecoratorNode<JSX.Element> {
     return (this.getLatest() as IfCardNode).__hasElse;
   }
 
+  getErrorMessage(): string | null {
+    return (this.getLatest() as IfCardNode).__errorMessage;
+  }
+
   setCondition(condition: string): this {
     const writable = this.getWritable() as IfCardNode;
     writable.__condition = condition;
@@ -141,6 +154,12 @@ export class IfCardNode extends DecoratorNode<JSX.Element> {
     writable.__hasElse = hasElse;
     return writable as this;
   }
+
+  setErrorMessage(errorMessage: string | null): this {
+    const writable = this.getWritable() as IfCardNode;
+    writable.__errorMessage = errorMessage;
+    return writable as this;
+  }
 }
 
 export function $createIfCardNode(settings?: {
@@ -148,15 +167,23 @@ export function $createIfCardNode(settings?: {
   content?: string;
   elseContent?: string;
   hasElse?: boolean;
+  errorMessage?: string | null;
 }): IfCardNode {
-  return $applyNodeReplacement(
-    new IfCardNode(
-      settings?.condition,
-      settings?.content,
-      settings?.elseContent,
-      settings?.hasElse,
-    ),
+  const node = new IfCardNode(
+    settings?.condition,
+    settings?.content,
+    settings?.elseContent,
+    settings?.hasElse,
+    settings?.errorMessage,
   );
+  node.setErrorMessage(validateIfCardState({
+    condition: node.getCondition(),
+    content: node.getContent(),
+    elseContent: node.getElseContent(),
+    hasElse: node.getHasElse(),
+    errorMessage: node.getErrorMessage(),
+  }));
+  return $applyNodeReplacement(node);
 }
 
 export function $isIfCardNode(node: LexicalNode | null | undefined): node is IfCardNode {
@@ -165,7 +192,7 @@ export function $isIfCardNode(node: LexicalNode | null | undefined): node is IfC
 
 export function $updateIfCardNode(
   nodeKey: NodeKey,
-  patch: Partial<{ condition: string; content: string; elseContent: string; hasElse: boolean }>,
+  patch: Partial<{ condition: string; content: string; elseContent: string; hasElse: boolean; errorMessage: string | null }>,
 ): void {
   const node = $getNodeByKey(nodeKey);
   if (!$isIfCardNode(node)) {
@@ -184,4 +211,49 @@ export function $updateIfCardNode(
   if (patch.hasElse !== undefined) {
     node.setHasElse(patch.hasElse);
   }
+  const errorMessage = patch.errorMessage ?? validateIfCardState({
+    condition: node.getCondition(),
+    content: node.getContent(),
+    elseContent: node.getElseContent(),
+    hasElse: node.getHasElse(),
+    errorMessage: node.getErrorMessage(),
+  });
+  node.setErrorMessage(errorMessage);
+}
+
+export function validateIfCardState(state: {
+  condition: string;
+  content: string;
+  elseContent: string;
+  hasElse: boolean;
+  errorMessage?: string | null;
+}): string | null {
+  if (state.condition.trim().length === 0) {
+    return 'Condition is required.';
+  }
+
+  const output = serializeIfNode(
+    {
+      kind: 'if',
+      settings: { ifExpression: state.condition },
+      contentNodeKeys: ['then'],
+      elseContentNodeKeys: state.hasElse ? ['else'] : undefined,
+    },
+    {
+      newline: '\n',
+      indent: (depth) => '  '.repeat(depth),
+      resolveNodeKey(nodeKey) {
+        if (nodeKey === 'then') {
+          return state.content;
+        }
+        if (nodeKey === 'else') {
+          return state.elseContent;
+        }
+        return '';
+      },
+    },
+  );
+
+  const diagnostics = parseTemplate(output).diagnostics.filter((diagnostic) => diagnostic.severity === 'error');
+  return diagnostics[0]?.message ?? null;
 }

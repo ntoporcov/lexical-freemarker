@@ -4,84 +4,92 @@ import { $createHeadingNode, HeadingNode, QuoteNode } from '@lexical/rich-text';
 import { $createListItemNode, $createListNode, ListItemNode, ListNode } from '@lexical/list';
 
 import { IfCardNode, $createIfCardNode } from '../nodes/IfCardNode';
-import { serializeEditorDocument } from '../serialization/serializeEditorDocument';
+import { exportEditorDocument, importEditorDocument } from '../serialization/roundTrip';
 
-async function withEditorState(build: () => void): Promise<string> {
+async function withEditor(build: () => void) {
   const editor = createEditor({ nodes: [HeadingNode, QuoteNode, ListNode, ListItemNode, IfCardNode] });
   await new Promise<void>((resolve) => {
     editor.update(() => {
       build();
     }, { onUpdate: () => resolve() });
   });
-  return serializeEditorDocument(editor.getEditorState());
+  return editor;
 }
 
-describe('serializeEditorDocument', () => {
-  it('serializes multiple If nodes in a single document', async () => {
-    const output = await withEditorState(() => {
-      const root = $getRoot();
-      root.clear();
-      root.append(
-        $createIfCardNode({ condition: 'user.age > 18', content: 'Adult', elseContent: 'Minor', hasElse: true }),
-        $createIfCardNode({ condition: 'user.vip', content: 'VIP', hasElse: false }),
-      );
-    });
-
-    expect(output).toContain('<#if user.age > 18>');
-    expect(output).toContain('<#else>');
-    expect(output).toContain('<#if user.vip>');
-  });
-
-  it('serializes mixed rich text and if nodes in order', async () => {
-    const output = await withEditorState(() => {
+describe('roundTrip formats', () => {
+  it('exports mixed documents in plain, markdown, and html', async () => {
+    const editor = await withEditor(() => {
       const root = $getRoot();
       root.clear();
       const heading = $createHeadingNode('h1');
       heading.append($createTextNode('Welcome'));
-      const paragraph = $createParagraphNode();
-      paragraph.append($createTextNode('Intro copy.'));
-      root.append(
-        heading,
-        paragraph,
-        $createIfCardNode({ condition: 'user.age >= 18', content: 'Adult', elseContent: 'Minor', hasElse: true }),
-      );
-    });
-
-    expect(output).toBe([
-      'Welcome',
-      'Intro copy.',
-      ['<#if user.age >= 18>', '  Adult', '<#else>', '  Minor', '</#if>'].join('\n'),
-    ].join('\n\n'));
-    expect(output.indexOf('Welcome')).toBeLessThan(output.indexOf('<#if user.age >= 18>'));
-  });
-
-  it('omits else blocks when the toggle is off', async () => {
-    const output = await withEditorState(() => {
-      const root = $getRoot();
-      root.clear();
-      root.append($createIfCardNode({ condition: 'user.active', content: 'Active', elseContent: 'Inactive', hasElse: false }));
-    });
-
-    expect(output).toContain('<#if user.active>');
-    expect(output).not.toContain('<#else>');
-    expect(output).not.toContain('Inactive');
-  });
-
-  it('preserves operators in conditions and list serialization', async () => {
-    const output = await withEditorState(() => {
-      const root = $getRoot();
-      root.clear();
       const list = $createListNode('bullet');
       const item = $createListItemNode();
       item.append($createTextNode('First item'));
       list.append(item);
       root.append(
+        heading,
         list,
-        $createIfCardNode({ condition: 'score >= 10 && score <= 20', content: 'Mid', elseContent: 'Out', hasElse: true }),
+        $createIfCardNode({ condition: 'user.age >= 18', content: 'Adult', elseContent: 'Minor', hasElse: true }),
       );
     });
 
-    expect(output).toContain('- First item');
-    expect(output).toContain('<#if score >= 10 && score <= 20>');
+    expect(exportEditorDocument(editor.getEditorState(), 'plain')).toContain('<#if user.age >= 18>');
+    expect(exportEditorDocument(editor.getEditorState(), 'markdown')).toContain('# Welcome');
+    expect(exportEditorDocument(editor.getEditorState(), 'html')).toContain('<h1>Welcome</h1>');
+  });
+
+  it('round-trips textarea input back into the editor for each format', async () => {
+    const editor = await withEditor(() => {
+      const root = $getRoot();
+      root.clear();
+      root.append($createParagraphNode());
+    });
+
+    await importEditorDocument(editor, 'Plain paragraph\n\n<#if user.active>\n  Yep\n</#if>', 'plain');
+    expect(exportEditorDocument(editor.getEditorState(), 'plain')).toContain('<#if user.active>');
+
+    await importEditorDocument(editor, '# Heading\n\n<#if user.vip>\n  VIP\n</#if>', 'markdown');
+    expect(exportEditorDocument(editor.getEditorState(), 'markdown')).toContain('# Heading');
+
+    await importEditorDocument(editor, '<h1>Title</h1><p>Body</p>\n<#if user.age > 18>\n  Adult\n</#if>', 'html');
+    expect(exportEditorDocument(editor.getEditorState(), 'html')).toContain('<h1>Title</h1>');
+  });
+
+  it('keeps node-level error state isolated when one freemarker block fails to import', async () => {
+    const editor = await withEditor(() => {
+      const root = $getRoot();
+      root.clear();
+      root.append($createParagraphNode());
+    });
+
+    await importEditorDocument(editor, 'Intro\n\n<#if >\nBroken\n</#if>\n\nOutro', 'plain');
+
+    let plain = '';
+    let errors = 0;
+    editor.getEditorState().read(() => {
+      plain = exportEditorDocument(editor.getEditorState(), 'plain');
+      errors = $getRoot().getChildren().filter((node) => node instanceof IfCardNode && node.getErrorMessage()).length;
+    });
+
+    expect(plain).toContain('Intro');
+    expect(plain).toContain('Outro');
+    expect(errors).toBe(1);
+  });
+
+  it('supports selector switching semantics via format-specific export output', async () => {
+    const editor = await withEditor(() => {
+      const root = $getRoot();
+      root.clear();
+      const paragraph = $createParagraphNode();
+      const text = $createTextNode('Bold');
+      text.toggleFormat('bold');
+      paragraph.append(text);
+      root.append(paragraph);
+    });
+
+    expect(exportEditorDocument(editor.getEditorState(), 'plain')).toBe('Bold');
+    expect(exportEditorDocument(editor.getEditorState(), 'markdown')).toBe('**Bold**');
+    expect(exportEditorDocument(editor.getEditorState(), 'html')).toBe('<p><strong>Bold</strong></p>');
   });
 });

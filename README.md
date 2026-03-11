@@ -62,6 +62,8 @@ Repo architecture notes for future maintainers and future context windows live i
 
 GitHub Pages deployment is defined in [.github/workflows/deploy-pages.yml](/Users/mininic/LexicalFreemarker/.github/workflows/deploy-pages.yml). The remaining manual step, if needed, is setting the repository Pages source to **GitHub Actions** in GitHub settings.
 
+The tester now supports plain-text, markdown, and HTML round-trip editing with Freemarker If cards preserved as raw template blocks between rich-text segments. Markdown/HTML import is best-effort and intentionally favors editor stability over perfect fidelity.
+
 ## Development
 
 ```bash

@@ -275,6 +275,22 @@ Ship a demo tester app in-repo for trying nodes live and inspecting generated Fr
   4. Diagnostics panel for parser/plugin messages
   5. Basic style switcher or class-map playground to test Tailwind classes
 
+### Output format selector + round-trip (new)
+- In the output panel, add a segmented-control style selector with:
+  - `Plain Text` (current behavior)
+  - `Markdown` (if Lexical markdown export/import is available)
+  - `HTML`
+- Freemarker serialization must wrap/compose with the selected output format.
+- Two-column layout is required:
+  - Left: Lexical editor with rich text + Freemarker nodes
+  - Right: editable textarea with format-aware exported output
+- Two-way state flow is required:
+  - Editor updates -> output textarea updates
+  - Output textarea edits -> parser/import updates editor state (best-effort)
+- Error isolation requirement:
+  - If a single Freemarker node fails to parse/round-trip, only that node enters an error state.
+  - The overall editor must remain interactive and not crash.
+
 ### CI/CD requirements
 - Add GitHub Action workflow to build and publish Pages artifact.
 - Keep library build + tester build in same CI pipeline (fail fast on either).

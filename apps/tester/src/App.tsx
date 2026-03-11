@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   $createParagraphNode,
@@ -23,10 +23,10 @@ import { RichTextPlugin } from '@lexical/react/LexicalRichTextPlugin';
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
 import { ListPlugin } from '@lexical/react/LexicalListPlugin';
 
-import { createIfNodeFactory, parseTemplate, registerFreemarkerPlugin, type FreemarkerDiagnostic } from '@mininic-nt/lexical-freemarker';
+import { createIfNodeFactory, parseTemplate, type FreemarkerDiagnostic } from '@mininic-nt/lexical-freemarker';
 
 import { $createIfCardNode, IfCardNode } from './nodes/IfCardNode';
-import { serializeEditorDocument } from './serialization/serializeEditorDocument';
+import { exportEditorDocument, importEditorDocument, type OutputFormat } from './serialization/roundTrip';
 
 const DEFAULT_DOCUMENT = () => {
   const root = $getRoot();
@@ -35,32 +35,33 @@ const DEFAULT_DOCUMENT = () => {
   heading.append($createTextNode('Freemarker playground'));
   const paragraph = $createParagraphNode();
   paragraph.append($createTextNode('Mix normal Lexical content with Freemarker cards in one document.'));
-  root.append(heading, paragraph, $createIfCardNode({
-    condition: 'user.age >= 18',
-    content: 'Adult block',
-    elseContent: 'Minor block',
-    hasElse: true,
-  }), $createParagraphNode());
+  root.append(
+    heading,
+    paragraph,
+    $createIfCardNode({
+      condition: 'user.age >= 18',
+      content: 'Adult block',
+      elseContent: 'Minor block',
+      hasElse: true,
+    }),
+    $createParagraphNode(),
+  );
 };
+
+const FORMAT_OPTIONS: Array<{ value: OutputFormat; label: string }> = [
+  { value: 'plain', label: 'Plain Text' },
+  { value: 'markdown', label: 'Markdown' },
+  { value: 'html', label: 'HTML' },
+];
 
 export function App() {
   const [editor, setEditor] = useState<LexicalEditor | null>(null);
-  const [output, setOutput] = useState('');
+  const [selectedFormat, setSelectedFormat] = useState<OutputFormat>('plain');
+  const [roundTripText, setRoundTripText] = useState('');
   const [diagnostics, setDiagnostics] = useState<FreemarkerDiagnostic[]>([]);
+  const lastSyncedRef = useRef('');
+  const importTimerRef = useRef<number | null>(null);
   const ifFactory = useMemo(() => createIfNodeFactory(), []);
-
-  useEffect(() => {
-    if (!editor) {
-      return;
-    }
-
-    return registerFreemarkerPlugin(editor, {
-      factories: [ifFactory],
-      onDiagnostics(nextDiagnostics) {
-        setDiagnostics(nextDiagnostics);
-      },
-    });
-  }, [editor, ifFactory]);
 
   const initialConfig = useMemo(
     () => ({
@@ -91,6 +92,47 @@ export function App() {
     [ifFactory.nodeClass],
   );
 
+  useEffect(() => {
+    return () => {
+      if (importTimerRef.current !== null) {
+        window.clearTimeout(importTimerRef.current);
+      }
+    };
+  }, []);
+
+  const queueImport = (value: string, format: OutputFormat) => {
+    if (!editor) {
+      return;
+    }
+
+    if (importTimerRef.current !== null) {
+      window.clearTimeout(importTimerRef.current);
+    }
+
+    importTimerRef.current = window.setTimeout(async () => {
+      try {
+        await importEditorDocument(editor, value, format);
+      } catch {
+        // Keep the editor stable. Best-effort import should never nuke the session.
+      }
+    }, 350);
+  };
+
+  const syncFromEditor = (editorState: EditorState, format: OutputFormat) => {
+    const nextOutput = exportEditorDocument(editorState, format);
+    lastSyncedRef.current = nextOutput;
+    setRoundTripText(nextOutput);
+    setDiagnostics(parseTemplate(exportEditorDocument(editorState, 'plain')).diagnostics);
+  };
+
+  useEffect(() => {
+    if (!editor) {
+      return;
+    }
+
+    syncFromEditor(editor.getEditorState(), selectedFormat);
+  }, [editor, selectedFormat]);
+
   return (
     <div className="tester-shell">
       <div className="tester-backdrop tester-backdrop-a" />
@@ -98,29 +140,29 @@ export function App() {
       <header className="hero">
         <div>
           <p className="eyebrow">Lexical Freemarker Tester</p>
-          <h1>Rich text on one side, real template output on the other.</h1>
+          <h1>Round-trip the document through plain text, markdown, or HTML without dropping the template layer.</h1>
           <p className="lede">
-            Use headings, lists, and multiple Freemarker If cards in the same editor. The output panel serializes the full document in order.
+            Rich text stays editable on the left, exported output stays editable on the right, and Freemarker cards sit cleanly between the two worlds.
           </p>
         </div>
-        <div className="hero-chip">Node pair: <code>rich-text + if-card</code></div>
+        <div className="hero-chip">Mode: <code>{selectedFormat}</code></div>
       </header>
 
       <LexicalComposer initialConfig={initialConfig}>
         <EditorBridge onReady={setEditor} />
-        <main className="grid">
-          <section className="card card-editor">
+        <main className="grid grid-two-column">
+          <section className="card card-editor-full">
             <div className="card-heading">
               <div>
                 <h2>Editor</h2>
-                <p>Real Lexical rich-text setup with heading, list, quote, and Freemarker card insertion.</p>
+                <p>Rich text nodes and Freemarker If cards in one document.</p>
               </div>
             </div>
             <Toolbar />
             <div className="editor-wrap">
               <RichTextPlugin
                 contentEditable={<ContentEditable className="editor-surface" aria-label="Freemarker rich text editor" />}
-                placeholder={<div className="editor-placeholder">Write content, then drop in If cards where you need template logic.</div>}
+                placeholder={<div className="editor-placeholder">Write rich text, then insert If cards where template logic belongs.</div>}
                 ErrorBoundary={LexicalErrorBoundary}
               />
             </div>
@@ -129,27 +171,48 @@ export function App() {
             <OnChangePlugin
               onChange={(nextEditorState: EditorState, nextEditor: LexicalEditor) => {
                 setEditor(nextEditor);
-                setOutput(serializeEditorDocument(nextEditorState));
-                setDiagnostics(parseTemplate(serializeEditorDocument(nextEditorState)).diagnostics);
+                syncFromEditor(nextEditorState, selectedFormat);
               }}
             />
           </section>
 
-          <section className="card card-output">
-            <div className="card-heading">
+          <section className="card card-output-full">
+            <div className="card-heading card-heading-stacked">
               <div>
-                <h2>Template Output</h2>
-                <p>Serialized Freemarker text for the full mixed document.</p>
+                <h2>Round-trip Output</h2>
+                <p>Edit the exported representation directly. Changes are imported back into the editor with best-effort format-aware parsing.</p>
+              </div>
+              <div className="segmented-control" role="tablist" aria-label="Output format selector">
+                {FORMAT_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    className={selectedFormat === option.value ? 'segment-active' : ''}
+                    onClick={() => setSelectedFormat(option.value)}
+                  >
+                    {option.label}
+                  </button>
+                ))}
               </div>
             </div>
-            <pre>{output}</pre>
+            <textarea
+              className="output-textarea"
+              value={roundTripText}
+              onChange={(event) => {
+                const value = event.target.value;
+                setRoundTripText(value);
+                if (value !== lastSyncedRef.current) {
+                  queueImport(value, selectedFormat);
+                }
+              }}
+            />
           </section>
 
           <section className="card card-diagnostics">
             <div className="card-heading">
               <div>
                 <h2>Diagnostics</h2>
-                <p>Parser diagnostics against the live serialized template.</p>
+                <p>Live diagnostics from the plain-text Freemarker layer.</p>
               </div>
             </div>
             {diagnostics.length === 0 ? (
