@@ -2,6 +2,15 @@
 
 Lexical plugin utilities for working with Freemarker template syntax.
 
+> ⚡ **Vibe Coded Project Notice**
+>
+> This repository is intentionally and unapologetically **vibe coded**.
+> It is built through fast iteration, intuition, and AI-assisted experimentation.
+> Expect rapid changes, occasional rough edges, and strong "ship-first, polish-next" energy.
+>
+> If that scares you, that's fair.
+> If that excites you, welcome home.
+
 ## Install
 
 ```bash
