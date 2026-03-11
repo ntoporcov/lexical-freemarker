@@ -1,0 +1,359 @@
+:root {
+  color-scheme: light;
+  --paper: #f3ead7;
+  --ink: #1d2328;
+  --accent: #b24a2a;
+  --accent-soft: rgba(178, 74, 42, 0.12);
+  --sky: #cfe4ef;
+  --line: rgba(29, 35, 40, 0.12);
+  --card: rgba(255, 251, 245, 0.82);
+  --shadow: 0 24px 60px rgba(35, 28, 24, 0.12);
+  font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(circle at top left, rgba(178, 74, 42, 0.18), transparent 35%),
+    radial-gradient(circle at 85% 15%, rgba(88, 130, 151, 0.22), transparent 28%),
+    linear-gradient(180deg, #f8f3e8 0%, #efe4cf 100%);
+  color: var(--ink);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+code,
+pre,
+.editor-surface,
+.hero-chip {
+  font-family: Consolas, "SFMono-Regular", "Liberation Mono", monospace;
+}
+
+.tester-shell {
+  position: relative;
+  min-height: 100vh;
+  padding: 32px;
+  overflow: hidden;
+}
+
+.tester-backdrop {
+  position: absolute;
+  border-radius: 999px;
+  filter: blur(10px);
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.tester-backdrop-a {
+  width: 260px;
+  height: 260px;
+  background: rgba(178, 74, 42, 0.14);
+  top: -60px;
+  right: 8%;
+}
+
+.tester-backdrop-b {
+  width: 220px;
+  height: 220px;
+  background: rgba(88, 130, 151, 0.18);
+  bottom: 10%;
+  left: -40px;
+}
+
+.hero,
+.grid {
+  position: relative;
+  z-index: 1;
+}
+
+.hero {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  align-items: end;
+  margin-bottom: 28px;
+}
+
+.eyebrow {
+  margin: 0 0 6px;
+  font-size: 0.78rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.hero h1 {
+  margin: 0;
+  max-width: 14ch;
+  font-size: clamp(2.5rem, 4vw, 4.8rem);
+  line-height: 0.96;
+}
+
+.lede {
+  max-width: 58ch;
+  margin: 14px 0 0;
+  color: rgba(29, 35, 40, 0.78);
+  font-size: 1.05rem;
+}
+
+.hero-chip {
+  padding: 12px 16px;
+  border-radius: 999px;
+  background: rgba(255, 250, 242, 0.78);
+  border: 1px solid rgba(29, 35, 40, 0.08);
+  box-shadow: var(--shadow);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 28px;
+  padding: 22px;
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(16px);
+}
+
+.card-editor {
+  grid-column: span 7;
+}
+
+.card-controls,
+.card-preview,
+.card-output,
+.card-diagnostics {
+  grid-column: span 5;
+}
+
+.card-preview,
+.card-output {
+  grid-column: span 6;
+}
+
+.card-diagnostics {
+  grid-column: span 12;
+}
+
+.card-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: start;
+  margin-bottom: 18px;
+}
+
+.card h2,
+.card h3 {
+  margin: 0;
+}
+
+.card-heading p,
+.empty-state {
+  margin: 6px 0 0;
+  color: rgba(29, 35, 40, 0.7);
+}
+
+.action-button {
+  border: 0;
+  border-radius: 999px;
+  padding: 12px 18px;
+  background: linear-gradient(135deg, #1f2f3d, #32536d);
+  color: white;
+  cursor: pointer;
+}
+
+.editor-surface {
+  min-height: 320px;
+  padding: 18px;
+  border-radius: 18px;
+  border: 1px solid rgba(29, 35, 40, 0.12);
+  background: rgba(255, 255, 255, 0.72);
+  white-space: pre-wrap;
+}
+
+.editor-placeholder {
+  position: absolute;
+  pointer-events: none;
+  padding: 18px;
+  color: rgba(29, 35, 40, 0.45);
+}
+
+.control-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.control-grid label {
+  display: grid;
+  gap: 8px;
+}
+
+.control-grid span {
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(29, 35, 40, 0.64);
+}
+
+.control-grid textarea,
+.control-grid select {
+  width: 100%;
+  border-radius: 14px;
+  border: 1px solid rgba(29, 35, 40, 0.14);
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.8);
+}
+
+.preview-shell {
+  border-radius: 20px;
+  border: 1px dashed rgba(29, 35, 40, 0.16);
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.56);
+}
+
+.output-stack {
+  display: grid;
+  gap: 16px;
+}
+
+.output-stack article {
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.64);
+  border: 1px solid rgba(29, 35, 40, 0.08);
+}
+
+.output-stack pre {
+  margin: 10px 0 0;
+  white-space: pre-wrap;
+}
+
+.diagnostics-list {
+  list-style: none;
+  display: grid;
+  gap: 10px;
+  padding: 0;
+  margin: 0;
+}
+
+.diagnostics-list li {
+  display: grid;
+  grid-template-columns: 220px 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: rgba(178, 74, 42, 0.08);
+}
+
+.panel-shell {
+  padding: 16px;
+  border-radius: 18px;
+}
+
+.panel-atelier {
+  background: linear-gradient(180deg, rgba(248, 240, 226, 0.95), rgba(240, 231, 214, 0.95));
+  border: 1px solid rgba(102, 80, 53, 0.18);
+}
+
+.panel-terminal {
+  background: #10171b;
+  color: #d8f6dc;
+  border: 1px solid rgba(86, 242, 125, 0.24);
+}
+
+.panel-paper {
+  background: linear-gradient(180deg, rgba(255, 253, 247, 0.98), rgba(248, 243, 233, 0.98));
+  border: 1px solid rgba(111, 99, 84, 0.18);
+}
+
+.settings-section {
+  display: grid;
+  gap: 12px;
+}
+
+.settings-row,
+.settings-column {
+  display: grid;
+  gap: 8px;
+}
+
+.settings-label {
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.settings-input {
+  border-radius: 12px;
+  border: 1px solid rgba(29, 35, 40, 0.12);
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.74);
+}
+
+.settings-textarea {
+  min-height: 120px;
+}
+
+.settings-help {
+  margin: 0;
+  font-size: 0.92rem;
+  opacity: 0.72;
+}
+
+.settings-error {
+  color: #8b2410;
+  font-size: 0.92rem;
+}
+
+.terminal-label,
+.terminal-help,
+.terminal-input {
+  color: #d8f6dc;
+}
+
+.terminal-input {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(86, 242, 125, 0.22);
+}
+
+.paper-input {
+  border-style: dashed;
+}
+
+@media (max-width: 980px) {
+  .tester-shell {
+    padding: 18px;
+  }
+
+  .hero {
+    flex-direction: column;
+    align-items: start;
+  }
+
+  .card-editor,
+  .card-controls,
+  .card-preview,
+  .card-output,
+  .card-diagnostics {
+    grid-column: span 12;
+  }
+
+  .diagnostics-list li {
+    grid-template-columns: 1fr;
+  }
+}
