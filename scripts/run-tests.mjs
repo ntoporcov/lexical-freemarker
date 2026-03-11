@@ -17,9 +17,18 @@ if (forwarded.length > 0) {
   args.push('test/*.test.mjs');
 }
 
-const testRun = spawnSync('node', args, {
+const libraryTests = spawnSync('node', args, {
   stdio: 'inherit',
   shell: process.platform === 'win32',
 });
 
-process.exit(testRun.status ?? 1);
+if (libraryTests.status !== 0) {
+  process.exit(libraryTests.status ?? 1);
+}
+
+const testerTests = spawnSync('npm', ['run', 'test', '--workspace', '@mininic-nt/lexical-freemarker-tester'], {
+  stdio: 'inherit',
+  shell: process.platform === 'win32',
+});
+
+process.exit(testerTests.status ?? 1);
