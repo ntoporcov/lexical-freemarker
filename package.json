@@ -1,0 +1,40 @@
+{
+  "name": "@mininic-nt/lexical-freemarker",
+  "version": "0.1.0",
+  "description": "Lexical plugins that wrap Freemarker templating functionality.",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm,cjs --dts",
+    "dev": "tsup src/index.ts --format esm,cjs --dts --watch",
+    "lint": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "lexical",
+    "freemarker",
+    "plugin",
+    "templating"
+  ],
+  "author": "",
+  "license": "UNLICENSED",
+  "peerDependencies": {
+    "lexical": "^0.24.0"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.0",
+    "typescript": "^5.9.2"
+  }
+}
