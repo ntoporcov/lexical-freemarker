@@ -1,14 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import lexical from '/Users/mininic/LexicalFreemarker/node_modules/lexical/Lexical.js';
+import { $createParagraphNode, $createTextNode, $getRoot, createEditor } from 'lexical';
 import {
   FreemarkerTemplatePlugin,
   createIfNodeFactory,
   registerFreemarkerPlugin,
 } from '../dist/index.js';
-
-const { $createParagraphNode, $createTextNode, $getRoot, createEditor } = lexical;
 
 test('FreemarkerTemplatePlugin emits tokens and full parse results', () => {
   const calls = [];
