@@ -46,24 +46,27 @@ describe('roundTrip formats', () => {
       root.append($createParagraphNode());
     });
 
-    await importEditorDocument(editor, 'Plain paragraph\n\n<#if user.active>\n  Yep\n</#if>', 'plain');
+    const plainResult = await importEditorDocument(editor, 'Plain paragraph\n\n<#if user.active>\n  Yep\n</#if>', 'plain');
+    expect(plainResult.status).toBe('success');
     expect(exportEditorDocument(editor.getEditorState(), 'plain')).toContain('<#if user.active>');
 
-    await importEditorDocument(editor, '# Heading\n\n<#if user.vip>\n  VIP\n</#if>', 'markdown');
+    const markdownResult = await importEditorDocument(editor, '# Heading\n\n<#if user.vip>\n  VIP\n</#if>', 'markdown');
+    expect(markdownResult.status).toBe('success');
     expect(exportEditorDocument(editor.getEditorState(), 'markdown')).toContain('# Heading');
 
-    await importEditorDocument(editor, '<h1>Title</h1><p>Body</p>\n<#if user.age > 18>\n  Adult\n</#if>', 'html');
+    const htmlResult = await importEditorDocument(editor, '<h1>Title</h1><p>Body</p>\n<#if user.age > 18>\n  Adult\n</#if>', 'html');
+    expect(htmlResult.status).toBe('success');
     expect(exportEditorDocument(editor.getEditorState(), 'html')).toContain('<h1>Title</h1>');
   });
 
-  it('keeps node-level error state isolated when one freemarker block fails to import', async () => {
+  it('keeps node-level error state isolated when one freemarker block is malformed', async () => {
     const editor = await withEditor(() => {
       const root = $getRoot();
       root.clear();
       root.append($createParagraphNode());
     });
 
-    await importEditorDocument(editor, 'Intro\n\n<#if >\nBroken\n</#if>\n\nOutro', 'plain');
+    const result = await importEditorDocument(editor, 'Intro\n\n<#if user.active>\nBroken\n\nOutro', 'plain');
 
     let plain = '';
     let errors = 0;
@@ -72,9 +75,31 @@ describe('roundTrip formats', () => {
       errors = $getRoot().getChildren().filter((node) => node instanceof IfCardNode && node.getErrorMessage()).length;
     });
 
+    expect(result.status).toBe('partial');
+    expect(result.message).toContain('Partial import');
     expect(plain).toContain('Intro');
     expect(plain).toContain('Outro');
     expect(errors).toBe(1);
+  });
+
+  it('successful parse clears prior error state', async () => {
+    const editor = await withEditor(() => {
+      const root = $getRoot();
+      root.clear();
+      root.append($createParagraphNode());
+    });
+
+    await importEditorDocument(editor, 'Intro\n\n<#if user.active>\nBroken\n\nOutro', 'plain');
+    const result = await importEditorDocument(editor, 'Fixed\n\n<#if user.active>\n  Yep\n</#if>', 'plain');
+
+    let errors = 0;
+    editor.getEditorState().read(() => {
+      errors = $getRoot().getChildren().filter((node) => node instanceof IfCardNode && node.getErrorMessage()).length;
+    });
+
+    expect(result.status).toBe('success');
+    expect(errors).toBe(0);
+    expect(exportEditorDocument(editor.getEditorState(), 'plain')).toContain('<#if user.active>');
   });
 
   it('supports selector switching semantics via format-specific export output', async () => {

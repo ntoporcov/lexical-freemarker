@@ -26,7 +26,7 @@ import { ListPlugin } from '@lexical/react/LexicalListPlugin';
 import { createIfNodeFactory, parseTemplate, type FreemarkerDiagnostic } from '@mininic-nt/lexical-freemarker';
 
 import { $createIfCardNode, IfCardNode } from './nodes/IfCardNode';
-import { exportEditorDocument, importEditorDocument, type OutputFormat } from './serialization/roundTrip';
+import { exportEditorDocument, importEditorDocument, type ImportResult, type OutputFormat } from './serialization/roundTrip';
 
 const DEFAULT_DOCUMENT = () => {
   const root = $getRoot();
@@ -54,13 +54,24 @@ const FORMAT_OPTIONS: Array<{ value: OutputFormat; label: string }> = [
   { value: 'html', label: 'HTML' },
 ];
 
+const IDLE_STATUS = {
+  tone: 'idle',
+  message: 'Edit the output, then click Parse Into Lexical to import it back.',
+} as const;
+
+type ParseStatusState = {
+  tone: 'idle' | 'success' | 'partial' | 'error';
+  message: string;
+};
+
 export function App() {
   const [editor, setEditor] = useState<LexicalEditor | null>(null);
   const [selectedFormat, setSelectedFormat] = useState<OutputFormat>('plain');
   const [roundTripText, setRoundTripText] = useState('');
   const [diagnostics, setDiagnostics] = useState<FreemarkerDiagnostic[]>([]);
+  const [isOutputDirty, setIsOutputDirty] = useState(false);
+  const [parseStatus, setParseStatus] = useState<ParseStatusState>(IDLE_STATUS);
   const lastSyncedRef = useRef('');
-  const importTimerRef = useRef<number | null>(null);
   const ifFactory = useMemo(() => createIfNodeFactory(), []);
 
   const initialConfig = useMemo(
@@ -92,36 +103,11 @@ export function App() {
     [ifFactory.nodeClass],
   );
 
-  useEffect(() => {
-    return () => {
-      if (importTimerRef.current !== null) {
-        window.clearTimeout(importTimerRef.current);
-      }
-    };
-  }, []);
-
-  const queueImport = (value: string, format: OutputFormat) => {
-    if (!editor) {
-      return;
-    }
-
-    if (importTimerRef.current !== null) {
-      window.clearTimeout(importTimerRef.current);
-    }
-
-    importTimerRef.current = window.setTimeout(async () => {
-      try {
-        await importEditorDocument(editor, value, format);
-      } catch {
-        // Keep the editor stable. Best-effort import should never nuke the session.
-      }
-    }, 350);
-  };
-
   const syncFromEditor = (editorState: EditorState, format: OutputFormat) => {
     const nextOutput = exportEditorDocument(editorState, format);
     lastSyncedRef.current = nextOutput;
     setRoundTripText(nextOutput);
+    setIsOutputDirty(false);
     setDiagnostics(parseTemplate(exportEditorDocument(editorState, 'plain')).diagnostics);
   };
 
@@ -131,7 +117,34 @@ export function App() {
     }
 
     syncFromEditor(editor.getEditorState(), selectedFormat);
+    setParseStatus(IDLE_STATUS);
   }, [editor, selectedFormat]);
+
+  const handleOutputChange = (value: string) => {
+    setRoundTripText(value);
+    const dirty = value !== lastSyncedRef.current;
+    setIsOutputDirty(dirty);
+    setParseStatus(dirty
+      ? { tone: 'idle', message: 'Draft changed. Click Parse Into Lexical to import this output back into the editor.' }
+      : IDLE_STATUS);
+  };
+
+  const handleParseBack = async () => {
+    if (!editor) {
+      return;
+    }
+
+    try {
+      const result = await importEditorDocument(editor, roundTripText, selectedFormat);
+      setParseStatus(mapImportResultToStatus(result));
+      setIsOutputDirty(false);
+    } catch (error) {
+      setParseStatus({
+        tone: 'error',
+        message: error instanceof Error ? error.message : 'Import failed before Lexical could update.',
+      });
+    }
+  };
 
   return (
     <div className="tester-shell">
@@ -180,7 +193,7 @@ export function App() {
             <div className="card-heading card-heading-stacked">
               <div>
                 <h2>Round-trip Output</h2>
-                <p>Edit the exported representation directly. Changes are imported back into the editor with best-effort format-aware parsing.</p>
+                <p>Editor updates stay live. Output only parses back when you click the button.</p>
               </div>
               <div className="segmented-control" role="tablist" aria-label="Output format selector">
                 {FORMAT_OPTIONS.map((option) => (
@@ -196,16 +209,24 @@ export function App() {
               </div>
             </div>
             <textarea
+              aria-label="Round-trip output"
               className="output-textarea"
               value={roundTripText}
-              onChange={(event) => {
-                const value = event.target.value;
-                setRoundTripText(value);
-                if (value !== lastSyncedRef.current) {
-                  queueImport(value, selectedFormat);
-                }
-              }}
+              onChange={(event) => handleOutputChange(event.target.value)}
             />
+            <div className="output-actions">
+              <button
+                type="button"
+                className="parse-button"
+                onClick={handleParseBack}
+                disabled={!editor || !isOutputDirty}
+              >
+                Parse Into Lexical
+              </button>
+              <p className={`parse-status parse-status-${parseStatus.tone}`} role="status" aria-live="polite">
+                {parseStatus.message}
+              </p>
+            </div>
           </section>
 
           <section className="card card-diagnostics">
@@ -235,6 +256,13 @@ export function App() {
       </LexicalComposer>
     </div>
   );
+}
+
+function mapImportResultToStatus(result: ImportResult): ParseStatusState {
+  return {
+    tone: result.status,
+    message: result.message,
+  };
 }
 
 function Toolbar() {

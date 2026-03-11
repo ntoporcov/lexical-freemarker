@@ -21,6 +21,16 @@ import { parseIfBlock, serializeIfNode } from '@mininic-nt/lexical-freemarker';
 import { $createIfCardNode, $isIfCardNode, type IfCardNode } from '../nodes/IfCardNode';
 
 export type OutputFormat = 'plain' | 'markdown' | 'html';
+export type ImportStatus = 'success' | 'partial' | 'error';
+
+export type ImportResult = {
+  status: ImportStatus;
+  importedBlockCount: number;
+  richTextBlockCount: number;
+  freemarkerBlockCount: number;
+  freemarkerErrorCount: number;
+  message: string;
+};
 
 export function exportEditorDocument(editorState: EditorState, format: OutputFormat): string {
   let output = '';
@@ -41,7 +51,7 @@ export async function importEditorDocument(
   editor: LexicalEditor,
   input: string,
   format: OutputFormat,
-): Promise<void> {
+): Promise<ImportResult> {
   const blocks = await importBlocks(input, format);
 
   await new Promise<void>((resolve) => {
@@ -69,6 +79,21 @@ export async function importEditorDocument(
       }
     }, { onUpdate: () => resolve() });
   });
+
+  const richTextBlockCount = blocks.filter((block) => block.type === 'nodes').length;
+  const freemarkerBlocks = blocks.filter((block): block is Extract<ImportedBlock, { type: 'if' }> => block.type === 'if');
+  const freemarkerErrorCount = freemarkerBlocks.filter((block) => block.errorMessage).length;
+  const successfulBlockCount = blocks.length - freemarkerErrorCount;
+  const status: ImportStatus = freemarkerErrorCount === 0 ? 'success' : successfulBlockCount > 0 ? 'partial' : 'error';
+
+  return {
+    status,
+    importedBlockCount: blocks.length,
+    richTextBlockCount,
+    freemarkerBlockCount: freemarkerBlocks.length,
+    freemarkerErrorCount,
+    message: buildImportMessage(status, blocks.length, freemarkerErrorCount),
+  };
 }
 
 export function serializeIfCardNode(node: IfCardNode): string {
@@ -99,12 +124,30 @@ type ImportedBlock =
   | { type: 'nodes'; nodes: Array<Record<string, unknown>> }
   | { type: 'if'; condition: string; content: string; elseContent: string; hasElse: boolean; errorMessage: string | null };
 
+type SplitSegment = {
+  type: 'text' | 'if';
+  content: string;
+  importError: string | null;
+};
+
 async function importBlocks(input: string, format: OutputFormat): Promise<ImportedBlock[]> {
   const segments = splitFreemarkerIfBlocks(input);
   const imported: ImportedBlock[] = [];
 
   for (const segment of segments) {
     if (segment.type === 'if') {
+      if (segment.importError) {
+        imported.push({
+          type: 'if',
+          condition: '',
+          content: segment.content,
+          elseContent: '',
+          hasElse: false,
+          errorMessage: segment.importError,
+        });
+        continue;
+      }
+
       try {
         const parsed = parseIfBlock(segment.content);
         imported.push({
@@ -122,7 +165,7 @@ async function importBlocks(input: string, format: OutputFormat): Promise<Import
           content: segment.content,
           elseContent: '',
           hasElse: false,
-          errorMessage: error instanceof Error ? error.message : 'Failed to parse Freemarker block.',
+          errorMessage: formatFreemarkerError(error),
         });
       }
       continue;
@@ -136,6 +179,23 @@ async function importBlocks(input: string, format: OutputFormat): Promise<Import
   }
 
   return imported;
+}
+
+function buildImportMessage(status: ImportStatus, blockCount: number, freemarkerErrorCount: number): string {
+  if (status === 'success') {
+    return `Import complete. Parsed ${blockCount} block${blockCount === 1 ? '' : 's'} into Lexical.`;
+  }
+
+  if (status === 'partial') {
+    return `Partial import. ${freemarkerErrorCount} Freemarker block${freemarkerErrorCount === 1 ? '' : 's'} stayed in error cards.`;
+  }
+
+  return `Import failed cleanly. ${freemarkerErrorCount} Freemarker block${freemarkerErrorCount === 1 ? '' : 's'} stayed in error cards.`;
+}
+
+function formatFreemarkerError(error: unknown): string {
+  const detail = error instanceof Error ? error.message : 'Failed to parse Freemarker block.';
+  return `Freemarker block error: ${detail}`;
 }
 
 async function importRichTextSegment(input: string, format: OutputFormat): Promise<Array<Record<string, unknown>>> {
@@ -230,32 +290,47 @@ function createDomParserDocument(html: string): Document {
   return new DOMParser().parseFromString(html, 'text/html');
 }
 
-function splitFreemarkerIfBlocks(input: string): Array<{ type: 'text' | 'if'; content: string }> {
-  const segments: Array<{ type: 'text' | 'if'; content: string }> = [];
+function splitFreemarkerIfBlocks(input: string): SplitSegment[] {
+  const segments: SplitSegment[] = [];
   let cursor = 0;
 
   while (cursor < input.length) {
     const start = input.indexOf('<#if', cursor);
     if (start === -1) {
-      segments.push({ type: 'text', content: input.slice(cursor) });
+      segments.push({ type: 'text', content: input.slice(cursor), importError: null });
       break;
     }
 
     if (start > cursor) {
-      segments.push({ type: 'text', content: input.slice(cursor, start) });
+      segments.push({ type: 'text', content: input.slice(cursor, start), importError: null });
     }
 
     const end = findIfBlockEnd(input, start);
     if (end === -1) {
-      segments.push({ type: 'if', content: input.slice(start) });
-      break;
+      const localizedEnd = findLocalizedMalformedIfEnd(input, start);
+      segments.push({
+        type: 'if',
+        content: input.slice(start, localizedEnd),
+        importError: 'Unclosed <#if block. Imported as an error card so the rest of the document stays editable.',
+      });
+      cursor = localizedEnd;
+      continue;
     }
 
-    segments.push({ type: 'if', content: input.slice(start, end) });
+    segments.push({ type: 'if', content: input.slice(start, end), importError: null });
     cursor = end;
   }
 
   return segments;
+}
+
+function findLocalizedMalformedIfEnd(input: string, start: number): number {
+  const remainder = input.slice(start);
+  const blankLineMatch = /\n\s*\n/.exec(remainder);
+  if (blankLineMatch) {
+    return start + blankLineMatch.index;
+  }
+  return input.length;
 }
 
 function findIfBlockEnd(input: string, start: number): number {

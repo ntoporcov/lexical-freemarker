@@ -176,13 +176,14 @@ export function $createIfCardNode(settings?: {
     settings?.hasElse,
     settings?.errorMessage,
   );
-  node.setErrorMessage(validateIfCardState({
+  const nextError = settings?.errorMessage ?? validateIfCardState({
     condition: node.getCondition(),
     content: node.getContent(),
     elseContent: node.getElseContent(),
     hasElse: node.getHasElse(),
     errorMessage: node.getErrorMessage(),
-  }));
+  });
+  node.setErrorMessage(nextError);
   return $applyNodeReplacement(node);
 }
 

@@ -55,6 +55,8 @@ It includes:
 - serializer output previews
 - conditional insertion controls
 - a class-map preset playground for the fallback settings UI
+- manual parse-back from output into Lexical via `Parse Into Lexical`
+- node-level Freemarker error containment so malformed `<#if` blocks become error cards instead of editor-wide failures
 
 ## Future Context
 
@@ -62,7 +64,7 @@ Repo architecture notes for future maintainers and future context windows live i
 
 GitHub Pages deployment is defined in [.github/workflows/deploy-pages.yml](/Users/mininic/LexicalFreemarker/.github/workflows/deploy-pages.yml). The remaining manual step, if needed, is setting the repository Pages source to **GitHub Actions** in GitHub settings.
 
-The tester now supports plain-text, markdown, and HTML round-trip editing with Freemarker If cards preserved as raw template blocks between rich-text segments. Markdown/HTML import is best-effort and intentionally favors editor stability over perfect fidelity.
+The tester now supports plain-text, markdown, and HTML round-trip editing with Freemarker If cards preserved as raw template blocks between rich-text segments. Editor-to-output sync stays live; output-to-editor sync is manual so imported failures stay contained. Markdown/HTML import is best-effort and intentionally favors editor stability over perfect fidelity.
 
 ## Development
 
