@@ -58,9 +58,19 @@ if (build.status !== 0) {
 
 const existingTests = [...targetedTests].filter((file) => existsSync(file));
 const args = existingTests.length > 0 ? existingTests : ['test/*.test.mjs'];
-const testRun = spawnSync('node', ['--test', ...args], {
+const libraryTests = spawnSync('node', ['--test', ...args], {
   stdio: 'inherit',
   shell: process.platform === 'win32',
 });
 
-process.exit(testRun.status ?? 1);
+if (libraryTests.status !== 0) {
+  process.exit(libraryTests.status ?? 1);
+}
+
+if (relevantFiles.some((file) => file.startsWith('apps/tester/'))) {
+  const testerTests = spawnSync('npm', ['run', 'test', '--workspace', '@mininic-nt/lexical-freemarker-tester'], {
+    stdio: 'inherit',
+    shell: process.platform === 'win32',
+  });
+  process.exit(testerTests.status ?? 1);
+}
