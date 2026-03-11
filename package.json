@@ -16,11 +16,21 @@
   "files": [
     "dist"
   ],
+  "workspaces": [
+    "apps/tester"
+  ],
   "scripts": {
-    "build": "tsup src/index.ts --format esm,cjs --dts",
-    "dev": "tsup src/index.ts --format esm,cjs --dts --watch",
-    "lint": "tsc --noEmit",
-    "prepublishOnly": "npm run build"
+    "build:lib": "tsup src/index.ts --format esm,cjs --dts",
+    "build:tester": "npm run build --workspace @mininic-nt/lexical-freemarker-tester",
+    "build": "npm run build:lib && npm run build:tester",
+    "dev:lib": "tsup src/index.ts --format esm,cjs --dts --watch",
+    "dev:tester": "npm run dev --workspace @mininic-nt/lexical-freemarker-tester",
+    "typecheck": "tsc --noEmit -p tsconfig.json && npm run typecheck --workspace @mininic-nt/lexical-freemarker-tester",
+    "lint": "npm run typecheck",
+    "test": "node ./scripts/run-tests.mjs",
+    "test:changed": "node ./scripts/test-changed.mjs",
+    "prepare": "node ./scripts/setup-git-hooks.mjs",
+    "prepublishOnly": "npm run build:lib"
   },
   "keywords": [
     "lexical",

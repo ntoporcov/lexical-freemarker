@@ -2,43 +2,84 @@
 
 Lexical plugin utilities for working with Freemarker template syntax.
 
-> ⚡ **Vibe Coded Project Notice**
->
-> This repository is intentionally and unapologetically **vibe coded**.
-> It is built through fast iteration, intuition, and AI-assisted experimentation.
-> Expect rapid changes, occasional rough edges, and strong "ship-first, polish-next" energy.
->
-> If that scares you, that's fair.
-> If that excites you, welcome home.
+> This repo moves fast. The code should still be deterministic, even if the vibes are reckless.
 
 ## Install
 
 ```bash
-npm i @mininic-nt/lexical-freemarker
+npm i @mininic-nt/lexical-freemarker lexical
 ```
 
-## Usage
+This library stays framework-light. React support lives in the tester app, not in the library package runtime.
+
+## Conditional Node MVP
 
 ```ts
-import { FreemarkerTemplatePlugin } from '@mininic-nt/lexical-freemarker';
+import {
+  createIfNodeFactory,
+  parseIfBlock,
+  parseTemplate,
+  registerFreemarkerPlugin,
+} from '@mininic-nt/lexical-freemarker';
 
-const plugin = new FreemarkerTemplatePlugin({
-  onTokens(tokens) {
-    console.log(tokens);
-  },
-});
+const ifFactory = createIfNodeFactory();
 
-plugin.parse('Hello ${user.name} <#if paid>Thanks</#if>');
+const result = parseTemplate('<#if (user.age > 18)>Adult</#if>');
+console.log(result.tokens, result.diagnostics);
+
+const block = parseIfBlock(`
+<#if (user.age > 18)>
+  Adult
+<#else>
+  Minor
+</#if>
+`);
+
+console.log(block.settings.ifExpression);
 ```
+
+`createIfNodeFactory()` ships with:
+- a typed factory contract for Conditional nodes
+- a minimal fallback settings panel renderer
+- class-map styling hooks for host apps
+- deterministic Freemarker serialization with optional override support
+
+## Tester App
+
+A separate React/Vite tester app lives in [apps/tester](/Users/mininic/LexicalFreemarker/apps/tester).
+It is intentionally a React implementation of the library rather than a library dependency.
+
+It includes:
+- a Lexical editor instance with the Conditional node class enabled
+- live diagnostics via `registerFreemarkerPlugin`
+- serializer output previews
+- conditional insertion controls
+- a class-map preset playground for the fallback settings UI
+
+## Future Context
+
+Repo architecture notes for future maintainers and future context windows live in [docs/architecture-notes.md](/Users/mininic/LexicalFreemarker/docs/architecture-notes.md).
+
+GitHub Pages deployment is defined in [.github/workflows/deploy-pages.yml](/Users/mininic/LexicalFreemarker/.github/workflows/deploy-pages.yml). The remaining manual step, if needed, is setting the repository Pages source to **GitHub Actions** in GitHub settings.
 
 ## Development
 
 ```bash
 npm install
+npm run typecheck
+npm run test
 npm run build
 ```
 
-## Notes
+Tester app only:
 
-This is an initial scaffold focused on typed tokenization and extension points.
-Next step is binding parser behavior to Lexical editor commands/transforms.
+```bash
+npm run dev:tester
+npm run build:tester
+```
+
+Fast pre-commit path:
+
+```bash
+npm run test:changed
+```
